@@ -19,6 +19,10 @@
 
       <SdkInstallerNuspecFile>$(RepoRoot)/packaging/windows/clisdk/VS.Redist.Common.Net.Core.SDK.$(Architecture).nuspec</SdkInstallerNuspecFile>
       <SdkInstallerNupkgFile>$(InstallerOutputDirectory)/VS.Redist.Common.Net.Core.SDK.$(Architecture).$(FullNugetVersion).nupkg</SdkInstallerNupkgFile>
+
+      <SdkMSBuildExtensionsNuspecFile>$(RepoRoot)/packaging/windows/clisdk/VS.Redist.Common.Net.Core.SDK.MSBuildExtensions.nuspec</SdkMSBuildExtensionsNuspecFile>
+      <SdkMSBuildExtensionsNupkgFile>$(InstallerOutputDirectory)/VS.Redist.Common.Net.Core.SDK.MSBuildExtensions.$(FullNugetVersion).nupkg</SdkMSBuildExtensionsNupkgFile>
+      <SdkMSBuildExtensionsSwrFile>$(InstallerOutputDirectory)/VS.Redist.Common.Net.Core.SDK.MSBuildExtensions.swr</SdkMSBuildExtensionsSwrFile>
     </PropertyGroup>
 
     <!-- Test Sdk MSI Properties -->
@@ -42,8 +46,7 @@
       <GenerateMsiVersion CommitCount="$(CommitCount)"
                           VersionMajor="$(VersionMajor)"
                           VersionMinor="$(VersionMinor)"
-                          VersionPatch="$(VersionPatch)"
-                          ReleaseSuffix="$(ReleaseSuffix)">
+                          VersionPatch="$(VersionPatch)">
         <Output TaskParameter="MsiVersion" PropertyName="MsiVersion" />
       </GenerateMsiVersion>
 
@@ -112,9 +115,7 @@
 
       <Exec Command="powershell -NoProfile -NoLogo $(SdkGenerateBundlePowershellScript)
                       '$(SdkInstallerFile)'
-                      '$(AdditionalDownloadedSharedFrameworkInstallerFile)'
-                      '$(AdditionalDownloadedHostFxrInstallerFile)'
-                      '$(AdditionalDownloadedSharedHostInstallerFile)'
+                      '$(AspNetCoreRuntimeInstallerWixLibFile)'
                       '$(DownloadedSharedFrameworkInstallerFile)'
                       '$(DownloadedHostFxrInstallerFile)'
                       '$(DownloadedSharedHostInstallerFile)'
@@ -143,6 +144,25 @@
                       '$(SdkInstallerNupkgFile)'" />
     </Target>
 
+    <Target Name="GenerateSdkMSBuildExtensionsNupkg"
+            DependsOnTargets="Init;Layout;MsiTargetsSetupInputOutputs;GenerateSdkBundle"
+            Condition=" '$(OS)' == 'Windows_NT'"
+            Inputs="$(MSBuildExtensionsLayoutDirectory)/**/*;
+                    $(SdkInstallerNuspecFile);
+                    $(SdkGenerateNupkgPowershellScript)"
+            Outputs="$(SdkMSBuildExtensionsNupkgFile);$(SdkMSBuildExtensionsSwrFile)">
+
+      <Exec Command="powershell -NoProfile -NoLogo $(SdkGenerateNupkgPowershellScript)
+                      '$(MSBuildExtensionsLayoutDirectory)'
+                      '$(FullNugetVersion)'
+                      '$(SdkMSBuildExtensionsNuspecFile)'
+                      '$(SdkMSBuildExtensionsNupkgFile)'" />
+      
+      <GenerateMSBuildExtensionsSWR MSBuildExtensionsLayoutDirectory="$(MSBuildExtensionsLayoutDirectory)"
+                                    OutputFile="$(SdkMSBuildExtensionsSwrFile)"/>
+      
+    </Target>
+
     <Target Name="TestSdkMsi"
             Inputs="$(SdkInstallerFile)"
             Outputs="$(SdkMsiTestedSentinel)"
@@ -168,6 +188,7 @@
                             GenerateSdkMsi;
                             GenerateSdkBundle;
                             GenerateSdkNupkg;
+                            GenerateSdkMSBuildExtensionsNupkg;
                             TestSdkMsi"
           Condition=" '$(OS)' == 'Windows_NT'" />
 

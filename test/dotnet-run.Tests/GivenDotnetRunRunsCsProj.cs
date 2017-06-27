@@ -2,6 +2,8 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.IO;
+using FluentAssertions;
+using Microsoft.DotNet.TestFramework;
 using Microsoft.DotNet.Tools.Test.Utilities;
 using Xunit;
 
@@ -34,6 +36,58 @@ namespace Microsoft.DotNet.Cli.Run.Tests
                 .ExecuteWithCapturedOutput()
                 .Should().Pass()
                          .And.HaveStdOutContaining("Hello World!");
+        }
+
+        [Fact]
+        public void ItImplicitlyRestoresAProjectWhenRunning()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput()
+                .Should().Pass()
+                         .And.HaveStdOutContaining("Hello World!");
+        }
+
+        [Fact]
+        public void ItCanRunAMultiTFMProjectWithImplicitRestore()
+        {
+            var testInstance = TestAssets.Get(
+                    TestAssetKinds.DesktopTestProjects,
+                    "NETFrameworkReferenceNETStandard20")
+                .CreateInstance()
+                .WithSourceFiles();
+
+            string projectDirectory = Path.Combine(testInstance.Root.FullName, "MultiTFMTestApp");
+
+            new RunCommand()
+                .WithWorkingDirectory(projectDirectory)
+                .ExecuteWithCapturedOutput("--framework netcoreapp2.0")
+                .Should().Pass()
+                         .And.HaveStdOutContaining("This string came from the test library!");
+        }
+
+        [Fact]
+        public void ItDoesNotImplicitlyRestoreAProjectWhenRunningWithTheNoRestoreOption()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--no-restore")
+                .Should().Fail()
+                .And.HaveStdOutContaining("project.assets.json' not found.");;
         }
 
         [Fact]
@@ -119,6 +173,24 @@ namespace Microsoft.DotNet.Cli.Run.Tests
         }
 
         [Fact]
+        public void ItRunsPortableAppsFromADifferentPathSpecifyingOnlyTheDirectoryWithoutBuilding()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                .CreateInstance()
+                .WithSourceFiles()
+                .WithRestoreFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RunCommand()
+                .WithWorkingDirectory(testInstance.Root.Parent)
+                .ExecuteWithCapturedOutput($"--project {testProjectDirectory}")
+                .Should().Pass()
+                         .And.HaveStdOutContaining("Hello World!");
+        }
+
+        [Fact]
         public void ItRunsAppWhenRestoringToSpecificPackageDirectory()
         {
             var rootPath = TestAssets.CreateTestDirectory().FullName;
@@ -126,7 +198,7 @@ namespace Microsoft.DotNet.Cli.Run.Tests
             string dir = "pkgs";
             string args = $"--packages {dir}";
 
-            string newArgs = $"console -o \"{rootPath}\"";
+            string newArgs = $"console -o \"{rootPath}\" --no-restore";
             new NewCommandShim()
                 .WithWorkingDirectory(rootPath)
                 .Execute(newArgs)
@@ -141,9 +213,308 @@ namespace Microsoft.DotNet.Cli.Run.Tests
 
             new RunCommand()
                 .WithWorkingDirectory(rootPath)
-                .ExecuteWithCapturedOutput()
+                .ExecuteWithCapturedOutput("--no-restore")
                 .Should().Pass()
                          .And.HaveStdOutContaining("Hello World");
+        }
+
+        [Fact]
+        public void ItReportsAGoodErrorWhenProjectHasMultipleFrameworks()
+        {
+            var testAppName = "MSBuildAppWithMultipleFrameworks";
+            var testInstance = TestAssets.Get(testAppName)
+                .CreateInstance()
+                .WithSourceFiles()
+                .WithRestoreFiles();
+
+            // use --no-build so this test can run on all platforms.
+            // the test app targets net451, which can't be built on non-Windows
+            new RunCommand()
+                .WithWorkingDirectory(testInstance.Root)
+                .ExecuteWithCapturedOutput("--no-build")
+                .Should().Fail()
+                    .And.HaveStdErrContaining("--framework");
+        }
+
+        [Fact]
+        public void ItCanPassArgumentsToSubjectAppByDoubleDash()
+        {
+            const string testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                .CreateInstance()
+                .WithSourceFiles()
+                .WithRestoreFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("-- foo bar baz")
+                .Should()
+                .Pass()
+                .And.HaveStdOutContaining("echo args:foo;bar;baz");
+        }
+
+        [Fact]
+        public void ItGivesAnErrorWhenAttemptingToUseALaunchProfileThatDoesNotExistWhenThereIsNoLaunchSettingsFile()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--launch-profile test")
+                .Should().Pass()
+                         .And.HaveStdOutContaining("Hello World!")
+                         .And.HaveStdErrContaining("The specified launch profile could not be located.");
+        }
+
+        [Fact]
+        public void ItUsesLaunchProfileOfTheSpecifiedName()
+        {
+            var testAppName = "AppWithLaunchSettings";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            var cmd = new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--launch-profile Second");
+
+            cmd.Should().Pass()
+                .And.HaveStdOutContaining("Second");
+
+            cmd.StdErr.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void ItDefaultsToTheFirstUsableLaunchProfile()
+        {
+            var testAppName = "AppWithLaunchSettings";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            var cmd = new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput();
+
+            cmd.Should().Pass()
+                .And.HaveStdOutContaining("First");
+                         
+            cmd.StdErr.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void ItGivesAnErrorWhenTheLaunchProfileNotFound()
+        {
+            var testAppName = "AppWithLaunchSettings";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--launch-profile Third")
+                .Should().Pass()
+                         .And.HaveStdOutContaining("(NO MESSAGE)")
+                         .And.HaveStdErrContaining("The launch profile \"Third\" could not be applied.");
+        }
+
+        [Fact]
+        public void ItGivesAnErrorWhenTheLaunchProfileCanNotBeHandled()
+        {
+            var testAppName = "AppWithLaunchSettings";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--launch-profile \"IIS Express\"")
+                .Should().Pass()
+                         .And.HaveStdOutContaining("(NO MESSAGE)")
+                         .And.HaveStdErrContaining("The launch profile \"IIS Express\" could not be applied.");
+        }
+
+        [Fact]
+        public void ItSkipsLaunchProfilesWhenTheSwitchIsSupplied()
+        {
+            var testAppName = "AppWithLaunchSettings";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            var cmd = new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--no-launch-profile");
+                
+            cmd.Should().Pass()
+                .And.HaveStdOutContaining("(NO MESSAGE)");
+
+            cmd.StdErr.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void ItSkipsLaunchProfilesWhenTheSwitchIsSuppliedWithoutErrorWhenThereAreNoLaunchSettings()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            var cmd = new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput("--no-launch-profile");
+
+            cmd.Should().Pass()
+                .And.HaveStdOutContaining("Hello World!");
+
+            cmd.StdErr.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void ItSkipsLaunchProfilesWhenThereIsNoUsableDefault()
+        {
+            var testAppName = "AppWithLaunchSettingsNoDefault";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            var cmd = new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput();
+
+            cmd.Should().Pass()
+                .And.HaveStdOutContaining("(NO MESSAGE)")
+                .And.HaveStdErrContaining("The launch profile \"(Default)\" could not be applied.");
+        }
+
+        [Fact]
+        public void ItPrintsAnErrorWhenLaunchSettingsAreCorrupted()
+        {
+            var testAppName = "AppWithCorruptedLaunchSettings";
+            var testInstance = TestAssets.Get(testAppName)
+                            .CreateInstance()
+                            .WithSourceFiles();
+
+            var testProjectDirectory = testInstance.Root.FullName;
+
+            new RestoreCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute("/p:SkipInvalidConfigurations=true")
+                .Should().Pass();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .Execute()
+                .Should().Pass();
+
+            var cmd = new RunCommand()
+                .WithWorkingDirectory(testProjectDirectory)
+                .ExecuteWithCapturedOutput();
+
+            cmd.Should().Pass()
+                .And.HaveStdOutContaining("(NO MESSAGE)")
+                .And.HaveStdErrContaining("The launch profile \"(Default)\" could not be applied.");
         }
     }
 }

@@ -80,21 +80,21 @@ This, however, does have one specific constraint: **newer versions must be insta
 ## Layout on disk
 ```
 <INSTALL_DIR>/ (%PATH%)
-	dotnet ("muxer", has platform dependant file extension)
+    dotnet ("muxer", has platform dependant file extension)
     hostfxr (implementation detail for "muxer", platform dependant file extension)
-	sdk/
+    sdk/
         <sdk-version-0>/ (i.e. "1.0.0-rc2-002543")
             ... (binaries like: dotnet.dll, csc.dll)
         <sdk-version-1>/
             ... (binaries)
         ...
-	shared/ ("redist" or "shared framework")
+    shared/ ("redist" or "shared framework")
         <target-framework-name>/ (currently only "Microsoft.NETCore.App")
-			<redist-version-0>/ (i.e. "1.0.0-rc2-3002543")
+            <redist-version-0>/ (i.e. "1.0.0-rc2-3002543")
                 ... (binaries like: coreclr.dll, mscorlib.ni.dll, System.*.dll, dotnet-hostimpl.dll, dotnet, netcoreapp.deps.json)
-			<redist-version-1>/
-				... (binaries)
-```	
+            <redist-version-1>/
+                ... (binaries)
+```
 
 ## Native dependencies
 .NET Core CLI is built on top of CoreFX and CoreCLR and as such its' dependencies set is defined by the platform that those two combine. Whether or not those dependencies will be installed depends on the installer being used. The table below lists out the installers and whether or not they bring in dependencies. 
@@ -126,8 +126,8 @@ Below table shows the mapping between the channels, branches and feeds for the D
 | Channel    	| Branch    	| Debian feed 	| Debian package name 	| NuGet version 	| NuGet feed                            	|
 |------------	|-----------	|-------------	|---------------------	|---------------	|---------------------------------------	|
 | Future    	| master    	| Development 	| dotnet-future      	| 1.0.0-dev-*   	| https://dotnet.myget.org/f/dotnet-cli 	|
-| Preview    	| rel/<ver> 	| Development 	| dotnet-dev-<version>              	| 1.0.0-beta-*  	| https://dotnet.myget.org/f/dotnet-cli 	|
-| Production 	| rel/<ver> 	| Production  	| dotnet-dev-<version>              	| 1.0.0         	| https://api.nuget.org/v3/index.json   	|
+| Preview    	| rel/<ver> 	| Development 	| dotnet-sdk-<version>              	| 1.0.0-beta-*  	| https://dotnet.myget.org/f/dotnet-cli 	|
+| Production 	| rel/<ver> 	| Production  	| dotnet-sdk-<version>              	| 1.0.0         	| https://api.nuget.org/v3/index.json   	|
 
 
 ## Funnels and discovery mechanisms for CLI bits

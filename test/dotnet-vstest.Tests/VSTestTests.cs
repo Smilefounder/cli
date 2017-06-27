@@ -16,7 +16,7 @@ namespace Microsoft.DotNet.Cli.VSTest.Tests
         [Fact]
         public void TestsFromAGivenContainerShouldRunWithExpectedOutput()
         {
-            var testAppName = "VSTestDotNetCore";
+            var testAppName = "VSTestCore";
             var testRoot = TestAssets.Get(testAppName)
                 .CreateInstance()
                 .WithSourceFiles()
@@ -34,14 +34,18 @@ namespace Microsoft.DotNet.Cli.VSTest.Tests
                 .GetDirectory("bin", configuration, "netcoreapp2.0")
                 .GetFile($"{testAppName}.dll");
 
-            var argsForVstest = $"\"{outputDll.FullName}\" {TestBase.ConsoleLoggerOutputNormal}";
+            var argsForVstest = $"\"{outputDll.FullName}\" --logger:console;verbosity=normal";
 
             // Call vstest
             var result = new VSTestCommand().ExecuteWithCapturedOutput(argsForVstest);
-            result.StdOut
-                .Should().Contain("Total tests: 2. Passed: 1. Failed: 1. Skipped: 0.")
-                .And.Contain("Passed   TestNamespace.VSTestTests.VSTestPassTest")
-                .And.Contain("Failed   TestNamespace.VSTestTests.VSTestFailTest");
+            if (!DotnetUnderTest.IsLocalized())
+            {
+                result.StdOut
+                    .Should().Contain("Total tests: 2. Passed: 1. Failed: 1. Skipped: 0.")
+                    .And.Contain("Passed   TestNamespace.VSTestTests.VSTestPassTest")
+                    .And.Contain("Failed   TestNamespace.VSTestTests.VSTestFailTest");
+            }
+
             result.ExitCode.Should().Be(1);
         }
     }

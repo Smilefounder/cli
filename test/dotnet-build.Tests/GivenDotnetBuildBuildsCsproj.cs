@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using FluentAssertions;
+using Microsoft.DotNet.TestFramework;
 using Microsoft.DotNet.Tools.Test.Utilities;
 using Xunit;
 using System.Linq;
@@ -31,11 +32,57 @@ namespace Microsoft.DotNet.Cli.Build.Tests
             var outputDll = testInstance.Root.GetDirectory("bin", configuration, "netcoreapp2.0")
                 .GetFile($"{testAppName}.dll");
 
-            var outputRunCommand = new TestCommand("dotnet");
+            var outputRunCommand = new DotnetCommand();
 
             outputRunCommand.ExecuteWithCapturedOutput(outputDll.FullName)
                 .Should().Pass()
                      .And.HaveStdOutContaining("Hello World");
+        }
+
+        [Fact]
+        public void ItImplicitlyRestoresAProjectWhenBuilding()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                .CreateInstance(testAppName)
+                .WithSourceFiles();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testInstance.Root)
+                .Execute()
+                .Should().Pass();
+        }
+
+        [Fact]
+        public void ItCanBuildAMultiTFMProjectWithImplicitRestore()
+        {
+            var testInstance = TestAssets.Get(
+                    TestAssetKinds.DesktopTestProjects,
+                    "NETFrameworkReferenceNETStandard20")
+                .CreateInstance()
+                .WithSourceFiles();
+
+            string projectDirectory = Path.Combine(testInstance.Root.FullName, "MultiTFMTestApp");
+
+            new BuildCommand()
+                .WithWorkingDirectory(projectDirectory)
+                .Execute("--framework netcoreapp2.0")
+                .Should().Pass();
+        }
+
+        [Fact]
+        public void ItDoesNotImplicitlyRestoreAProjectWhenBuildingWithTheNoRestoreOption()
+        {
+            var testAppName = "MSBuildTestApp";
+            var testInstance = TestAssets.Get(testAppName)
+                .CreateInstance(testAppName)
+                .WithSourceFiles();
+
+            new BuildCommand()
+                .WithWorkingDirectory(testInstance.Root)
+                .ExecuteWithCapturedOutput("--no-restore")
+                .Should().Fail()
+                .And.HaveStdOutContaining("project.assets.json' not found.");;
         }
 
         [Fact]
@@ -46,7 +93,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
             string dir = "pkgs";
             string args = $"--packages {dir}";
 
-            string newArgs = $"console -f netcoreapp2.0 -o \"{rootPath}\" --debug:ephemeral-hive";
+            string newArgs = $"console -f netcoreapp2.0 -o \"{rootPath}\" --debug:ephemeral-hive --no-restore";
             new NewCommandShim()
                 .WithWorkingDirectory(rootPath)
                 .Execute(newArgs)
@@ -62,7 +109,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
 
             new BuildCommand()
                 .WithWorkingDirectory(rootPath)
-                .Execute()
+                .Execute("--no-restore")
                 .Should().Pass();
 
             var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? "Debug";
@@ -72,7 +119,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                 SearchOption.TopDirectoryOnly)
                 .Single();
 
-            var outputRunCommand = new TestCommand("dotnet");
+            var outputRunCommand = new DotnetCommand();
 
             outputRunCommand.ExecuteWithCapturedOutput(outputDll)
                 .Should().Pass()
@@ -96,7 +143,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                 .WithWorkingDirectory(testInstance.Root)
                 .ExecuteWithCapturedOutput();
             cmd.Should().Pass();
-            cmd.StdOut.Should().ContainVisuallySameFragment(expectedBuildSummary);
+            cmd.StdOut.Should().ContainVisuallySameFragmentIfNotLocalized(expectedBuildSummary);
         }
     }
 }

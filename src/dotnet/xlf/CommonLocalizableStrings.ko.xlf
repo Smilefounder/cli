@@ -1,8 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
-  <file datatype="xml" source-language="en" target-language="ko" original="src/dotnet/CommonLocalizableStrings.resx">
+  <file datatype="xml" source-language="en" target-language="ko" original="../CommonLocalizableStrings.resx">
     <body>
-      <group id="src/dotnet/CommonLocalizableStrings.resx" />
       <trans-unit id="CouldNotFindAnyProjectInDirectory">
         <source>Could not find any project in `{0}`.</source>
         <target state="translated">`{0}`에서 프로젝트를 찾을 수 없습니다.</target>
@@ -368,11 +367,6 @@
         <target state="translated">추가할 참조를 하나 이상 지정해야 합니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectAlreadyHasAReference">
-        <source>Project {0} already has a reference `{1}`.</source>
-        <target state="translated">{0} 프로젝트에 이미 `{1}` 참조가 있습니다.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="PackageReferenceDoesNotExist">
         <source>Package reference `{0}` does not exist.</source>
         <target state="translated">패키지 참조 `{0}`이(가) 없습니다.</target>
@@ -575,7 +569,7 @@
       </trans-unit>
       <trans-unit id="MoreThanOneSolutionInDirectory">
         <source>Found more than one solution file in {0}. Please specify which one to use.</source>
-        <target state="translated">{0}에서 솔루션 파일을 두 개 이상 찾았습니다. 사용할 파일을 지정하세요.</target>
+        <target state="translated">{0}에서 솔루션 파일이 두 개 이상 있습니다. 사용할 파일을 지정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="SolutionAlreadyContainsProject">
@@ -595,7 +589,7 @@
       </trans-unit>
       <trans-unit id="ProjectNotCompatibleWithFrameworks">
         <source>Project `{0}` cannot be added due to incompatible targeted frameworks between the two projects. Please review the project you are trying to add and verify that is compatible with the following targets:</source>
-        <target state="translated">두 프로젝트 간에 호환되지 않는 대상 프레임워크 때문에 `{0}` 프로젝트를 추가할 수 없습니다. 추가하려는 프로젝트를 검토하고 다음 대상과 호환되는지 확인하세요.</target>
+        <target state="translated">두 프로젝트 간에 호환되지 않는 대상 프레임워크 때문에 '{0}' 프로젝트를 추가할 수 없습니다. 추가하려는 프로젝트를 검토하고 다음 대상과 호환되는지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectDoesNotTargetFramework">
@@ -605,7 +599,7 @@
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeEvaluated">
         <source>Project `{0}` could not be evaluated. Evaluation failed with following error:
-{1}</source>
+{1}.</source>
         <target state="translated">‘{0}’ 프로젝트를 평가할 수 없습니다. 다음 오류와 함께 평가가 실패했습니다.
 {1}</target>
         <note />
@@ -616,7 +610,7 @@
         <note />
       </trans-unit>
       <trans-unit id="InvalidSolutionFormatString">
-        <source>Invalid solution `{0}`. {1}</source>
+        <source>Invalid solution `{0}`. {1}.</source>
         <target state="translated">`{0}` 솔루션이 잘못되었습니다. {1}</target>
         <note />
       </trans-unit>
@@ -631,13 +625,53 @@
         <note />
       </trans-unit>
       <trans-unit id="CmdSlnFile">
-        <source>&lt;SLN_FILE&gt;</source>
-        <target state="translated">&lt;SLN_FILE&gt;</target>
+        <source>SLN_FILE</source>
+        <target state="translated">SLN_FILE</target>
         <note />
       </trans-unit>
       <trans-unit id="CmdProjectFile">
-        <source>&lt;PROJECT&gt;</source>
-        <target state="translated">&lt;PROJECT&gt;</target>
+        <source>PROJECT</source>
+        <target state="translated">PROJECT</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidProjectWithExceptionMessage">
+        <source>Invalid project `{0}`. {1}.</source>
+        <target state="translated">`{0}` 프로젝트가 잘못되었습니다. {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerbosityOptionDescription">
+        <source>Set the verbosity level of the command. Allowed values are q[uiet], m[inimal], n[ormal], d[etailed], and diag[nostic].</source>
+        <target state="translated">명령의 세부 정보 표시 수준을 설정합니다. 허용되는 값은 q[uiet], m[inimal], n[ormal], d[etailed] 및 diag[nostic]입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FrameworkOptionDescription">
+        <source>Target framework to publish for. The target framework has to be specified in the project file.</source>
+        <target state="translated">게시할 대상 프레임워크입니다. 대상 프레임워크는 프로젝트 파일에서 지정해야 합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RuntimeOptionDescription">
+        <source>Publish the project for a given runtime. This is used when creating self-contained deployment. Default is to publish a framework-dependent app.</source>
+        <target state="translated">지정된 런타임 동안 프로젝트를 게시합니다. 자체 포함 배포를 만들 때 사용됩니다. 기본값은 프레임워크 종속 앱을 게시하는 것입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationOptionDescription">
+        <source>Configuration to use for building the project.  Default for most projects is  "Debug".</source>
+        <target state="translated">프로젝트 빌드에 사용할 구성입니다.  대부분의 프로젝트에서 기본값은 "Debug"입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CmdVersionSuffixDescription">
+        <source>Defines the value for the $(VersionSuffix) property in the project.</source>
+        <target state="translated">프로젝트에서 $(VersionSuffix) 속성의 값을 정의합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowHelpDescription">
+        <source>Show help information.</source>
+        <target state="translated">도움말 정보를 표시합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoRestoreDescription">
+        <source>Does not do an implicit restore when executing the command.</source>
+        <target state="new">Does not do an implicit restore when executing the command.</target>
         <note />
       </trans-unit>
     </body>

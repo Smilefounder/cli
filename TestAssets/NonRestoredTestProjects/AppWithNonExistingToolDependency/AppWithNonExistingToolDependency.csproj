@@ -7,10 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETCore.App" Version="$(CLI_SharedFrameworkVersion)" />
-  </ItemGroup>
-
-  <ItemGroup>
     <DotNetCliToolReference Include="dotnet-nonexistingtool" Version="1.0.0" />
   </ItemGroup>
 

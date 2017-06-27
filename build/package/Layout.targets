@@ -3,7 +3,6 @@
   <PropertyGroup>
     <SdkDebugLayoutOutputDirectory>$(LayoutDirectory)/$(ArtifactNameSdkDebug)</SdkDebugLayoutOutputDirectory>
     <CombinedHostHostFxrFrameworkSdkOutputDirectory>$(LayoutDirectory)/$(ArtifactNameCombinedHostHostFxrFrameworkSdk)</CombinedHostHostFxrFrameworkSdkOutputDirectory>
-    <CombinedFrameworkSdkOutputDirectory>$(LayoutDirectory)/$(ArtifactNameCombinedFrameworkSdk)</CombinedFrameworkSdkOutputDirectory>
   </PropertyGroup>
 
   <Target DependsOnTargets="Init" Name="SetupLayoutInputsOutputs" >
@@ -12,8 +11,8 @@
       <SdkLayoutInput Include="$(OutputDirectory)/sdk/**/*" />
       <SdkDebugLayoutInput Include="$(SymbolsDirectory)/sdk/**/*" />
       <CombinedHostHostFxrFrameworkSdkInput Include="$(OutputDirectory)/**/*" />
-      <CombinedFrameworkSdkInput Include="$(OutputDirectory)/shared/**/*" />
-      <CombinedFrameworkSdkInput Include="$(OutputDirectory)/sdk/**/*" />
+
+      <AspNetRuntimeFilesInput Include="$(AspNetRuntimePackageStorePublishDirectory)/**/*" />
     </ItemGroup>
 
     <MakeRelative
@@ -30,11 +29,6 @@
       Path1="$(OutputDirectory)/"
       Path2="%(CombinedHostHostFxrFrameworkSdkInput.Identity)" >
       <Output TaskParameter="RelativePath" ItemName="CombinedHostHostFxrFrameworkSdkRelativeOutputFiles" />
-    </MakeRelative>
-    <MakeRelative
-      Path1="$(OutputDirectory)/"
-      Path2="%(CombinedFrameworkSdkInput.Identity)" >
-      <Output TaskParameter="RelativePath" ItemName="CombinedFrameworkSdkOutputFiles" />
     </MakeRelative>
 
     <!-- Set up Items Defining Layouts for easy change -->
@@ -58,13 +52,6 @@
         <OutputFiles>@(CombinedHostHostFxrFrameworkSdkRelativeOutputFiles -> '$(CombinedHostHostFxrFrameworkSdkOutputDirectory)/%(Identity)')</OutputFiles>
         <NameWithVersion>$(ArtifactNameWithVersionCombinedHostHostFxrFrameworkSdk)</NameWithVersion>
         <Name>$(ArtifactNameCombinedHostHostFxrFrameworkSdk)</Name>
-      </LayoutDefinition>
-
-      <LayoutDefinition Include="CombinedFrameworkSdk">
-        <InputFiles>@(CombinedFrameworkSdkInput)</InputFiles>
-        <OutputFiles>@(CombinedFrameworkSdkOutputFiles -> '$(CombinedFrameworkSdkOutputDirectory)/%(Identity)')</OutputFiles>
-        <NameWithVersion>$(ArtifactNameWithVersionCombinedFrameworkSdk)</NameWithVersion>
-        <Name>$(ArtifactNameCombinedFrameworkSdk)</Name>
       </LayoutDefinition>
 
     </ItemGroup>

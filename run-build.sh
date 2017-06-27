@@ -59,7 +59,7 @@ LINUX_PORTABLE_INSTALL_ARGS=
 CUSTOM_BUILD_ARGS=
 
 # Set nuget package cache under the repo
-export NUGET_PACKAGES="$REPOROOT/.nuget/packages"
+[ -z $NUGET_PACKAGES ] && export NUGET_PACKAGES="$REPOROOT/.nuget/packages"
 
 args=( "$@" )
 
@@ -90,6 +90,12 @@ while [[ $# > 0 ]]; do
             args=( "${args[@]/$2}" )
             shift
             ;;
+        --runtime-id)
+            CUSTOM_BUILD_ARGS="/p:Rid=\"$2\""
+            args=( "${args[@]/$1}" )
+            args=( "${args[@]/$2}" )
+            shift
+            ;;
         # This is here just to eat away this parameter because CI still passes this in.
         --targets)            
             args=( "${args[@]/$1}" )
@@ -97,9 +103,8 @@ while [[ $# > 0 ]]; do
             shift
             ;;
         --linux-portable)
-            LINUX_PORTABLE_INSTALL_ARGS="--linux-portable"
-            # Until we get test support for 2.0 we need to pass in the targets without test.
-            CUSTOM_BUILD_ARGS="/p:Rid=\"linux-x64\" /p:OSName=\"linux\" /p:CLITargets=\"Prepare;Compile;Package;Publish\""
+            LINUX_PORTABLE_INSTALL_ARGS="--runtime-id linux-x64"
+            CUSTOM_BUILD_ARGS="/p:Rid=\"linux-x64\" /p:OSName=\"linux\" /p:IslinuxPortable=\"true\""
             args=( "${args[@]/$1}" )
             ;;
         --help)
@@ -125,51 +130,45 @@ done
 
 # $args array may have empty elements in it.
 # The easiest way to remove them is to cast to string and back to array.
-# This will actually break quoted arguments, arguments like 
+# This will actually break quoted arguments, arguments like
 # -test "hello world" will be broken into three arguments instead of two, as it should.
 temp="${args[@]}"
 args=($temp)
 
-# Use a repo-local install directory (but not the artifacts directory because that gets cleaned a lot
-[ -z "$DOTNET_INSTALL_DIR_PJ" ] && export DOTNET_INSTALL_DIR_PJ=$REPOROOT/.dotnet_stage0PJ/$ARCHITECTURE
-[ -d "$DOTNET_INSTALL_DIR_PJ" ] || mkdir -p $DOTNET_INSTALL_DIR_PJ
-
-# Also create an install directory for a post-PJnistic CLI 
+# Create an install directory for the stage 0 CLI
 [ -z "$DOTNET_INSTALL_DIR" ] && export DOTNET_INSTALL_DIR=$REPOROOT/.dotnet_stage0/$ARCHITECTURE
 [ -d "$DOTNET_INSTALL_DIR" ] || mkdir -p $DOTNET_INSTALL_DIR
 
-# During xplat bootstrapping, disable HTTP parallelism to avoid fatal restore timeouts.
-export __INIT_TOOLS_RESTORE_ARGS="$__INIT_TOOLS_RESTORE_ARGS --disable-parallel"
+# We also need to pull down a project.json based CLI that is used by some tests
+# so create another directory for that.
+[ -z "$DOTNET_INSTALL_DIR_PJ" ] && export DOTNET_INSTALL_DIR_PJ=$REPOROOT/.dotnet_stage0PJ/$ARCHITECTURE
+[ -d "$DOTNET_INSTALL_DIR_PJ" ] || mkdir -p $DOTNET_INSTALL_DIR_PJ
+
+export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 
 # Enable verbose VS Test Console logging
 export VSTEST_BUILD_TRACE=1
 export VSTEST_TRACE_BUILD=1
 
-DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
-toolsLocalPath="$REPOROOT/build_tools"
-bootStrapperPath="$toolsLocalPath/bootstrap.sh"
-dotnetInstallPath="$toolsLocalPath/dotnet-install.sh"
-if [ ! -f $bootStrapperPath ]; then
-    if [ ! -d $toolsLocalPath ]; then
-        mkdir $toolsLocalPath
-    fi
-    download "https://raw.githubusercontent.com/dotnet/buildtools/master/bootstrap/bootstrap.sh" "$bootStrapperPath"
-    chmod u+x $bootStrapperPath
+
+# Don't resolve shared frameworks from user or global locations
+DOTNET_MULTILEVEL_LOOKUP=0
+
+# Install a stage 0
+(set -x ; "$REPOROOT/scripts/obtain/dotnet-install.sh" --channel "release/2.0.0" --install-dir "$DOTNET_INSTALL_DIR" --architecture "$ARCHITECTURE" $LINUX_PORTABLE_INSTALL_ARGS --version "2.0.0-preview2-006437")
+
+EXIT_CODE=$?
+if [ $EXIT_CODE != 0 ]; then
+    echo "run-build: Error: installing stage0 with exit code $EXIT_CODE." >&2
+    exit $EXIT_CODE
 fi
 
-$bootStrapperPath --dotNetInstallBranch master --repositoryRoot "$REPOROOT" --toolsLocalPath "$toolsLocalPath" --cliInstallPath $DOTNET_INSTALL_DIR_PJ --architecture $ARCHITECTURE > bootstrap.log
-
-if [ $? != 0 ]; then
-    echo "run-build: Error: Boot-strapping failed with exit code $?, see bootstrap.log for more information." >&2
-    exit $?
-fi
-
-# now execute the script
-echo "installing CLI: $dotnetInstallPath --channel \"master\" --install-dir $DOTNET_INSTALL_DIR --architecture \"$ARCHITECTURE\" $LINUX_PORTABLE_INSTALL_ARGS"
-$dotnetInstallPath --channel "master" --install-dir $DOTNET_INSTALL_DIR --architecture "$ARCHITECTURE" $LINUX_PORTABLE_INSTALL_ARGS
-if [ $? != 0 ]; then
-    echo "run-build: Error: Boot-strapping post-PJ stage0 with exit code $?." >&2
-    exit $?
+# Install a project.json based CLI for use by tests
+(set -x ; "$REPOROOT/scripts/obtain/dotnet-install.sh" --channel "master" --install-dir "$DOTNET_INSTALL_DIR_PJ" --architecture "$ARCHITECTURE" --version "1.0.0-preview2-1-003177")
+EXIT_CODE=$?
+if [ $EXIT_CODE != 0 ]; then
+    echo "run-build: Error: installing project-json based cli failed with exit code $EXIT_CODE." >&2
+    exit $EXIT_CODE
 fi
 
 # Put stage 0 on the PATH (for this shell only)
@@ -190,7 +189,7 @@ echo "${args[@]}"
 
 if [ $BUILD -eq 1 ]; then
     dotnet msbuild build.proj /p:Architecture=$ARCHITECTURE $CUSTOM_BUILD_ARGS /p:GeneratePropsFile=true /t:WriteDynamicPropsToStaticPropsFiles
-    dotnet msbuild build.proj /m /v:diag /fl /flp:v=diag /p:Architecture=$ARCHITECTURE $CUSTOM_BUILD_ARGS "${args[@]}"
+    dotnet msbuild build.proj /m /v:normal /fl /flp:v=diag /p:Architecture=$ARCHITECTURE $CUSTOM_BUILD_ARGS "${args[@]}"
 else
     echo "Not building due to --nobuild"
     echo "Command that would be run is: 'dotnet msbuild build.proj /m /p:Architecture=$ARCHITECTURE $CUSTOM_BUILD_ARGS ${args[@]}'"

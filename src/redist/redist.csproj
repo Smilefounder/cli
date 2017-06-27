@@ -2,6 +2,7 @@
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.tasks" />
   <Import Project="$(RepoRoot)/build/compile/LzmaArchive.targets" />
+  <Import Project="$(RepoRoot)/build/MSBuildExtensions.targets" />
 
   <PropertyGroup>
     <VersionPrefix>$(CliVersionPrefix)</VersionPrefix>
@@ -9,7 +10,7 @@
     <RuntimeFrameworkVersion>$(CLI_SharedFrameworkVersion)</RuntimeFrameworkVersion>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     <CopyBuildOutputToPublishDirectory>false</CopyBuildOutputToPublishDirectory>
-    <PackageTargetFallback>$(PackageTargetFallback);dotnet5.4</PackageTargetFallback>
+    <AssetTargetFallback>$(AssetTargetFallback);dotnet5.4</AssetTargetFallback>
     <PublishDir>$(SdkOutputDirectory)</PublishDir>
     <VersionSuffix>$(CommitCount)</VersionSuffix>
   </PropertyGroup>
@@ -20,6 +21,11 @@
     <PackageReference Include="NuGet.Build.Tasks" Version="$(CLI_NuGet_Version)" />
     <PackageReference Include="Microsoft.TestPlatform.CLI" Version="$(CLI_TestPlatform_Version)" />
     <PackageReference Include="Microsoft.TestPlatform.Build" Version="$(CLI_TestPlatform_Version)" />
+    <PackageReference Include="NuGet.ProjectModel" Version="$(CLI_NuGet_Version)" />
+    <!-- The project json migration commands depend on an older version of Roslyn.
+         Lift the version here to match what tool_roslyn depends on (otherwise an older version will
+         be added to the TPA when we crossgen and we won't be able to crossgen tool_roslyn -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(CLI_Roslyn_Version)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +34,23 @@
     <ProjectReference Include="..\tool_msbuild\tool_msbuild.csproj" />
     <ProjectReference Include="..\tool_nuget\tool_nuget.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="minimumMSBuildVersion">
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="PublishAspNetRuntimePackageStore"
+          AfterTargets="CrossgenPublishDir">
+    <ItemGroup>
+      <AspNetRuntimePackageStore Remove="*" />
+      <AspNetRuntimePackageStore Include="$(AspNetRuntimePackageStorePublishDirectory)/**/*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(AspNetRuntimePackageStore)"
+          DestinationFiles="@(AspNetRuntimePackageStore->'$(OutputDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 
   <Target Name="PublishSharedFramework"
           BeforeTargets="Publish">
@@ -56,6 +79,14 @@
                    ProjectPath="$(SrcDirectory)/tool_roslyn/tool_roslyn.csproj" />
   </Target>
 
+  <Target Name="PublishFSharp"
+          BeforeTargets="Publish">
+          
+    <DotNetPublish ToolPath="$(Stage0Directory)"
+                   Configuration="$(Configuration)"
+                   ProjectPath="$(SrcDirectory)/tool_fsharp/tool_fsc.csproj" />
+  </Target>
+
   <Target Name="GenerateCliRuntimeConfigurationFiles"
           AfterTargets="Publish">
     <RemoveAssetFromDepsPackages DepsFile="$(PublishDir)/$(TargetName).deps.json"
@@ -78,11 +109,17 @@
   </Target>
 
   <Target Name="PublishMSBuildExtensions"
+          DependsOnTargets="GenerateMSBuildExtensions"
           AfterTargets="Publish"
           BeforeTargets="GenerateCliRuntimeConfigurationFiles">
+    <ItemGroup>
+      <MSBuildExtensionsContent Update="@(MSBuildExtensionsContent)">
+        <DestinationPath Condition="'%(MSBuildExtensionsContent.DestinationPath)' == ''">$(PublishDir)/%(MSBuildExtensionsContent.DeploymentSubpath)%(RecursiveDir)%(Filename)%(Extension)</DestinationPath>
+      </MSBuildExtensionsContent>
+    </ItemGroup>
     
       <Copy SourceFiles="@(MSBuildExtensionsContent)"
-            DestinationFolder="$(PublishDir)/%(RecursiveDir)" />
+            DestinationFiles="%(MSBuildExtensionsContent.DestinationPath)" />
 
       <PropertyGroup>
         <MSBuildTargetsDirectory>$(PublishDir)/runtimes/any/native</MSBuildTargetsDirectory>
@@ -105,16 +142,24 @@
                                    AssetPath="%(NuPkgContentForMSBuildExtensionsRelativePaths.Identity)" />
   </Target>
 
+  <!-- The msdia140typelib_clr0200.dll file is not MIT licensed (and it only used on Windows). Remove it, so
+       we can MIT license the published dotnet -->
+  <Target Name="RemoveMSDiaTypeLib"
+          AfterTargets="Publish"
+          Condition="'$(OSName)' != 'win'">
+    <Delete Files="$(PublishDir)/TestHost/msdia140typelib_clr0200.dll" />
+  </Target>
+
   <Target Name="PublishSdks"
           AfterTargets="Publish">
     <ItemGroup>
-      <SdksToBundle Include="$(RepoRoot)/build/BundledSdks.proj">
+      <SdksToBundle Include="$(RepoRoot)/build/RestoreDependency.proj">
         <Properties>
           CLIBuildDll=$(CLIBuildDll);
           NuGetPackagesDir=$(NuGetPackagesDir);
           SdkLayoutDirectory=$(SdkOutputDirectory)/Sdks/%(BundledSdk.Identity);
-          SdkPackageName=%(BundledSdk.Identity);
-          SdkPackageVersion=%(BundledSdk.Version);
+          DependencyPackageName=%(BundledSdk.Identity);
+          DependencyPackageVersion=%(BundledSdk.Version);
           Stage0Directory=$(Stage0Directory)
         </Properties>
       </SdksToBundle>
@@ -146,6 +191,7 @@
   </Target>
 
   <Target Name="PublishLzmaArchive"
+          Condition="'$(CLIBUILD_SKIP_LZMA)' != 'true'"
           DependsOnTargets="GetNuGetPackagesArchive"
           AfterTargets="Publish">
   </Target>
@@ -154,20 +200,14 @@
           Condition=" '$(DISABLE_CROSSGEN)' == '' "
           AfterTargets="PublishMSBuildExtensions">
     <ItemGroup>
-      <NETCore10Assemblies Include="$(PublishDir)/System.ComponentModel.Primitives.dll;
-                                    $(PublishDir)/System.Collections.Specialized.dll;
-                                    $(PublishDir)/System.Collections.NonGeneric.dll;
-                                    $(PublishDir)/System.Private.DataContractSerialization.dll" />
-    </ItemGroup>
-
-    <!-- Move these "1.0" assemblies that TestPlatform lays down out of the way so crossgen doesn't pick them up.
-          We need https://github.com/dotnet/cli/issues/5464 fixed, so test platform is in a separate directory -->
-    <Move SourceFiles="@(NETCore10Assemblies)"
-          DestinationFiles="@(NETCore10Assemblies->'$(PublishDir)/%(Filename)%(Extension).bak')" />
-
-    <ItemGroup>
       <!-- Removing Full CLR built TestHost assemblies from getting Crossgen as it is throwing error -->
       <SdkFiles Include="$(PublishDir)/**/*" Exclude="$(PublishDir)/TestHost*/**/*;$(PublishDir)/Sdks/**/*" />
+
+      <!-- Don't try to CrossGen .NET Framework support assemblies for .NET Standard -->
+      <SdkFiles Remove="$(PublishDir)/Microsoft\Microsoft.NET.Build.Extensions\net*\**\*" />
+
+      <!-- Don't try to CrossGen tasks and supporting DLLs compiled for .NET Framework -->
+      <SdkFiles Remove="$(PublishDir)/Microsoft\Microsoft.NET.Build.Extensions\tools\net*\**\*" />
     </ItemGroup>
 
     <AddMetadataIsPE Items="@(SdkFiles)">
@@ -195,32 +235,21 @@
               PlatformAssemblyPaths="@(PlatformAssemblies);
                                      @(PublishDirSubDirectories);
                                      $(SharedFrameworkNameVersionPath)" />
-
-    <!-- Move the "1.0" assemblies back -->
-    <Move SourceFiles="@(NETCore10Assemblies->'$(PublishDir)/%(Filename)%(Extension).bak')"
-          DestinationFiles="@(NETCore10Assemblies)" />
-  </Target>
-
-  <Target Name="RemoveVbc"
-          AfterTargets="CrossgenPublishDir">
-    <ItemGroup>
-      <_VbcPath Include="$(PublishDir)/**/vbc.exe" />
-    </ItemGroup>
-
-    <Delete Files="@(_VbcPath)" />
   </Target>
 
   <Target Name="ChmodPublishDir"
-          AfterTargets="RemoveVbc"
+          AfterTargets="CrossgenPublishDir"
           Condition=" '$(OSName)' != 'win' ">
     
     <Exec Command="find $(SdkOutputDirectory) -type d -exec chmod 755 {} \;" />
     <Exec Command="find $(SdkOutputDirectory) -type f -exec chmod 644 {} \;" />
     <Chmod Mode="755" Glob="$(SdkOutputDirectory)/Roslyn/RunCsc.sh" />
+    <Chmod Mode="755" Glob="$(SdkOutputDirectory)/Roslyn/RunVbc.sh" />
+    <Chmod Mode="755" Glob="$(SdkOutputDirectory)/FSharp/RunFsc.sh" />
   </Target>
 
   <Target Name="CreateSymbolsDirectory"
-          AfterTargets="RemoveVbc">
+          AfterTargets="CrossgenPublishDir">
     <ItemGroup>
       <_AllSdkFiles Include="$(PublishDir)/**/*" />
     </ItemGroup>
@@ -236,5 +265,36 @@
     </ItemGroup>
 
     <Delete Files="@(PdbsToClean)" />
+  </Target>
+
+  <Target Name="PublishStage2WithBackwardsCompatibleRuntimes"
+          AfterTargets="PublishLzmaArchive;">
+    <ItemGroup>
+      <BackwardsCompatibleSharedFrameworks Remove="*" />
+      <BackwardsCompatibleSharedFrameworks Include="$(BackwardsCompatibleSharedFrameworksPublishDirectory)/**/*" />
+
+      <Stage2Cli Remove="*" />
+      <Stage2Cli Include="$(OutputDirectory)/**/*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(BackwardsCompatibleSharedFrameworks)"
+          DestinationFiles="@(BackwardsCompatibleSharedFrameworks->'$(Stage2WithBackwardsCompatibleRuntimesOutputDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
+
+    <Copy SourceFiles="@(Stage2Cli)"
+          DestinationFiles="@(Stage2Cli->'$(Stage2WithBackwardsCompatibleRuntimesOutputDirectory)/%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <Target Name="RetargetVSTestConsole"
+          AfterTargets="Publish">
+    <PropertyGroup>
+      <VSTestRuntimeConfigPath>$(PublishDir)/vstest.console.runtimeconfig.json</VSTestRuntimeConfigPath>
+      <ReplacementPattern>"version": ".*"</ReplacementPattern>
+      <ReplacementString>"version": "$(CLI_SharedFrameworkVersion)"</ReplacementString>
+    </PropertyGroup>
+    <ReplaceFileContents
+      InputFile="$(VSTestRuntimeConfigPath)"
+      DestinationFile="$(VSTestRuntimeConfigPath)"
+      ReplacementPatterns="$(ReplacementPattern)"
+      ReplacementStrings="$(ReplacementString)" />
   </Target>
 </Project>

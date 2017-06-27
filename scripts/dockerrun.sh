@@ -67,6 +67,9 @@ if [ -z "$DOCKERFILE" ]; then
         elif [ "$(cat /etc/*-release | grep -cim1 centos)" -eq 1 ]; then
             echo "Detected current OS as CentOS, using 'centos' image"
             export DOCKERFILE=scripts/docker/centos
+        elif [ "$(cat /etc/*-release | grep -cim1 rhel)" -eq 1 ]; then
+            echo "Detected current OS as rhel, using 'rhel' image"
+            export DOCKERFILE=scripts/docker/rhel
         elif [ "$(cat /etc/*-release | grep -cim1 debian)" -eq 1 ]; then
             echo "Detected current OS as Debian, using 'debian' image"
             export DOCKERFILE=scripts/docker/debian
@@ -136,5 +139,12 @@ docker run $INTERACTIVE -t --rm --sig-proxy=true \
     -e COMMITCOUNT \
     -e DROPSUFFIX \
     -e RELEASESUFFIX \
+    -e COREFXAZURECONTAINER \
+    -e AZUREACCOUNTNAME \
+    -e AZUREACCESSTOKEN \
+    -e VSOPASSWORD \
+    -e RELEASETOOLSGITURL \
+    -e CORESETUPBLOBROOTURL \
+    -e CORESETUPBLOBACCESSTOKEN \
     $DOTNET_BUILD_CONTAINER_TAG \
     $BUILD_COMMAND "$@"

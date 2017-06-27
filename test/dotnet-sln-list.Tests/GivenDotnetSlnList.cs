@@ -3,6 +3,7 @@
 
 using FluentAssertions;
 using Microsoft.DotNet.Cli.Sln.Internal;
+using Microsoft.DotNet.Tools;
 using Microsoft.DotNet.Tools.Test.Utilities;
 using System;
 using System.IO;
@@ -18,10 +19,27 @@ namespace Microsoft.DotNet.Cli.Sln.List.Tests
 Usage: dotnet sln <SLN_FILE> list [options]
 
 Arguments:
-  <SLN_FILE>  Solution file to operate on. If not specified, the command will search the current directory for one.
+  <SLN_FILE>   Solution file to operate on. If not specified, the command will search the current directory for one.
 
 Options:
-  -h|--help  Show help information";
+  -h, --help   Show help information.
+";
+
+        private const string SlnCommandHelpText = @".NET modify solution file command
+
+Usage: dotnet sln [options] <SLN_FILE> [command]
+
+Arguments:
+  <SLN_FILE>   Solution file to operate on. If not specified, the command will search the current directory for one.
+
+Options:
+  -h, --help   Show help information.
+
+Commands:
+  add <args>      .NET Add project(s) to a solution file Command
+  list            .NET List project(s) in a solution file Command
+  remove <args>   .NET Remove project(s) from a solution file Command
+";
 
         [Theory]
         [InlineData("--help")]
@@ -31,7 +49,7 @@ Options:
             var cmd = new DotnetCommand()
                 .ExecuteWithCapturedOutput($"sln list {helpArg}");
             cmd.Should().Pass();
-            cmd.StdOut.Should().BeVisuallyEquivalentTo(HelpText);
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText);
         }
 
         [Theory]
@@ -42,7 +60,8 @@ Options:
             var cmd = new DotnetCommand()
                 .ExecuteWithCapturedOutput($"sln {commandName}");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be("Required command was not provided.");
+            cmd.StdErr.Should().Be(CommonLocalizableStrings.RequiredCommandNotPassed);
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(SlnCommandHelpText);
         }
 
         [Fact]
@@ -51,7 +70,7 @@ Options:
             var cmd = new DotnetCommand()
                 .ExecuteWithCapturedOutput("sln one.sln two.sln three.sln list");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be("Unrecognized command or argument 'two.sln'");
+            cmd.StdErr.Should().BeVisuallyEquivalentTo("Unrecognized command or argument 'two.sln'\r\nUnrecognized command or argument 'three.sln'");
         }
 
         [Theory]
@@ -65,8 +84,8 @@ Options:
             var cmd = new DotnetCommand()
                 .ExecuteWithCapturedOutput($"sln {solutionName} list");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be($"Could not find solution or directory `{solutionName}`.");
-            cmd.StdOut.Should().BeVisuallyEquivalentTo(HelpText);
+            cmd.StdErr.Should().Be(string.Format(CommonLocalizableStrings.CouldNotFindSolutionOrDirectory, solutionName));
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText);
         }
 
         [Fact]
@@ -83,8 +102,8 @@ Options:
                 .WithWorkingDirectory(projectDirectory)
                 .ExecuteWithCapturedOutput("sln InvalidSolution.sln list");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be("Invalid solution `InvalidSolution.sln`. Invalid format in line 1: File header is missing");
-            cmd.StdOut.Should().BeVisuallyEquivalentTo(HelpText);
+            cmd.StdErr.Should().Be(string.Format(CommonLocalizableStrings.InvalidSolutionFormatString, "InvalidSolution.sln", LocalizableStrings.FileHeaderMissingError));
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText);
         }
 
         [Fact]
@@ -102,8 +121,8 @@ Options:
                 .WithWorkingDirectory(projectDirectory)
                 .ExecuteWithCapturedOutput("sln list");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be($"Invalid solution `{solutionFullPath}`. Invalid format in line 1: File header is missing");
-            cmd.StdOut.Should().BeVisuallyEquivalentTo(HelpText);
+            cmd.StdErr.Should().Be(string.Format(CommonLocalizableStrings.InvalidSolutionFormatString, solutionFullPath, LocalizableStrings.FileHeaderMissingError));
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText);
         }
 
         [Fact]
@@ -121,8 +140,8 @@ Options:
                 .WithWorkingDirectory(solutionDir)
                 .ExecuteWithCapturedOutput("sln list");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be($"Specified solution file {solutionDir + Path.DirectorySeparatorChar} does not exist, or there is no solution file in the directory.");
-            cmd.StdOut.Should().BeVisuallyEquivalentTo(HelpText);
+            cmd.StdErr.Should().Be(string.Format(CommonLocalizableStrings.SolutionDoesNotExist, solutionDir + Path.DirectorySeparatorChar));
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText);
         }
 
         [Fact]
@@ -139,8 +158,8 @@ Options:
                 .WithWorkingDirectory(projectDirectory)
                 .ExecuteWithCapturedOutput("sln list");
             cmd.Should().Fail();
-            cmd.StdErr.Should().Be($"Found more than one solution file in {projectDirectory + Path.DirectorySeparatorChar}. Please specify which one to use.");
-            cmd.StdOut.Should().BeVisuallyEquivalentTo(HelpText);
+            cmd.StdErr.Should().Be(string.Format(CommonLocalizableStrings.MoreThanOneSolutionInDirectory, projectDirectory + Path.DirectorySeparatorChar));
+            cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText);
         }
 
         [Fact]
@@ -157,14 +176,15 @@ Options:
                 .WithWorkingDirectory(projectDirectory)
                 .ExecuteWithCapturedOutput("sln list");
             cmd.Should().Pass();
-            cmd.StdOut.Should().Be("No projects found in the solution.");
+            cmd.StdOut.Should().Be(CommonLocalizableStrings.NoProjectsFound);
         }
 
         [Fact]
         public void WhenProjectReferencesArePresentInTheSolutionItListsThem()
         {
-            string OutputText = $@"Project reference(s)
---------------------
+            string OutputText = CommonLocalizableStrings.ProjectReferenceOneOrMore;
+            OutputText += $@"
+{new string('-', OutputText.Length)}
 {Path.Combine("App", "App.csproj")}
 {Path.Combine("Lib", "Lib.csproj")}";
 
